@@ -58,6 +58,8 @@ settler_baby_grown=[]
 settler_happiness=[]
 settler_gender=[]
 settler_job=[]
+settler_age=[]
+settler_social=[]
 tree_x=[]
 tree_y=[]
 house_x=[]
@@ -397,15 +399,38 @@ class settler:
 
                 if cal_Dist(settler_x[i],settler_y[i],x_dest,y_dest)<3:
                     settler_sheltered[i]=1
-                    if settler_hunger[i]<1000: settler_health[i]=100
+                    if settler_hunger[i]<1000 and settler_age[i]<63000*0.5 and settler_health[i]<100: settler_health[i]=settler_health[i]+1
                     x_mod=x_mod*3
                     y_mod=y_mod*3
   
 
-                    
+            elif len(animal_x)>2 and settler_job[i]=='hunter' and (sum(settler_hunger)/len(settler_hunger))>750 and len(animal_dead_x)<1: #seek to hunt when people are hungry
+                    dist_short=9999
+                    for j in range(0,len(animal_x)):
+                        dist=cal_Dist(settler_x[i],settler_y[i],animal_x[j],animal_y[j])
+                        if dist<dist_short:
+                            dist_short=dist
+                            x_dest=animal_x[j]
+                            y_dest=animal_y[j]
+                            animal_short=j
+                            
+
+                     
+                    if settler_x[i]-x_dest>0:
+                        x_mod=mod
+                    else:
+                        x_mod=mod*-1
+
+                    if settler_y[i]-y_dest>0:
+                        y_mod=mod
+                    else:
+                        y_mod=mod*-1
+
+                    if dist_short<3:
+                        animal.hunted(animal_short)             
                     
     
-            elif len(settler_x)>len(house_x) and len(tree_x)>1 and settler_job[i]=='builder':#seek material for shelter
+            elif (len(settler_x)+len(settler_baby_x)*0.25)>len(house_x) and len(tree_x)>1 and settler_job[i]=='builder':#seek material for shelter
 
                 dist_short=9999
                 for j in range(0,len(tree_x)):
@@ -521,30 +546,30 @@ class settler:
                     settler_dead_buried[dead_short]=1
 
 
-            elif len(house_x)>=len(settler_x) and settler_gender[i] and len(settler_x)>1 and len([k for k, e in enumerate(settler_gender) if e == 0])>len(settler_baby_parent)  : #seak mate
+            elif len(house_x)>=len(settler_x) and settler_age[i]<63000*0.35 and settler_happiness[i]>50 and settler_gender[i] and len(settler_x)>1 and len([k for k, e in enumerate(settler_gender) if e == 0])>len(settler_baby_parent)  : #seak mate
                 dist_short=9999
                 for j in range(0,len(settler_x)):
                     dist=cal_Dist(settler_x[i],settler_y[i],settler_x[j],settler_y[j])
-                    if dist<dist_short and not settler_gender[j] and j not in settler_baby_parent:
+                    if dist<dist_short and not settler_gender[j] and j not in settler_baby_parent and settler_age[j]<63000*0.35:
                          dist_short=dist
                          x_dest=settler_x[j]
                          y_dest=settler_y[j]
                          settler_short=j
-     
 
-                     
-                if settler_x[i]-x_dest>0:
-                    x_mod=mod
-                else:
-                    x_mod=mod*-1
+                if dist_short<9999:    
+                    if settler_x[i]-x_dest>0:
+                         x_mod=mod
+                    else:
+                         x_mod=mod*-1
 
-                if settler_y[i]-y_dest>0:
-                    y_mod=mod
-                else:
-                    y_mod=mod*-1
+                    if settler_y[i]-y_dest>0:
+                         y_mod=mod
+                    else:
+                         y_mod=mod*-1
 
                 if dist_short<3:
                     settler_baby_parent.append(settler_short)
+                    #print(settler_age[i]*(15/6300), settler_age[j]*(15/6300))
                     settler_baby.born(x_dest,y_dest)
             elif windmill_stage<2 and len(land_farm_i)>5 and settler_job[i]=='builder': #seek to build windmill
                  if settler_inv_wood[i]<5 and len(tree_x)>1:
@@ -690,6 +715,34 @@ class settler:
                      y_mod=y_mod*3
                      if settler_happiness[i]<100:
                          settler_happiness[i]=settler_happiness[i]+0.1
+            elif len(settler_x)>1: #seek to socialize when bored
+                 dist_short=9999
+                 for j in range(0,len(settler_x)):
+                     dist=cal_Dist(settler_x[i],settler_y[i],settler_x[j],settler_y[j])
+                     if dist<dist_short and j!=i and len([k for k, e in enumerate(settler_social[i]) if e == j])<10:
+                          dist_short=dist
+                          x_dest=settler_x[j]
+                          y_dest=settler_y[j]
+                          settler_short=j
+
+                 if dist_short<9999:    
+                     if settler_x[i]-x_dest>0:
+                          x_mod=mod
+                     else:
+                          x_mod=mod*-1
+
+                     if settler_y[i]-y_dest>0:
+                          y_mod=mod
+                     else:
+                          y_mod=mod*-1
+
+                 if dist_short<7:
+                     if settler_happiness[i]<100: settler_happiness[i]=settler_happiness[i]+0.1
+                     settler_social[i].append(settler_short)
+                     if len(settler_social[i])>(len(settler_x)-2)*10: settler_social[i]=[]
+                  
+
+            
             x_r=random.random()
             y_r=random.random() 
             if x_r+x_mod<0.5:
@@ -704,8 +757,11 @@ class settler:
 
           
             settler.build(i)
+            settler_age[i]=settler_age[i]+1
             if temp<32 and not settler_sheltered[i]: settler_health[i]=settler_health[i]-0.1
-            if settler_hunger[i]>1000: settler_health[i]=settler_health[i]-0.1    
+            if settler_hunger[i]>1000: settler_health[i]=settler_health[i]-0.1
+            if settler_age[i]>63000*0.5: settler_health[i]=settler_health[i]-0.1*random.randint(0,1)
+            if settler_age[i]>63000*0.35: settler_job[i]='retired'
             if settler_health[i]<1:
                 settler_dead_x.append(settler_x[i])
                 settler_dead_y.append(settler_y[i])
@@ -714,7 +770,7 @@ class settler:
                     if settler_baby_parent[j]>i and settler_baby_parent[j]!=-10: settler_baby_parent[j]=settler_baby_parent[j]-1
                 settler_dead.append(i)
             settler_hunger[i]=settler_hunger[i]+1
-
+          
         for i in sorted(settler_dead, reverse=True):
             settler.die(i)
            
@@ -724,7 +780,7 @@ class settler:
 
     def build(i):
 
-        if settler_inv_wood[i]>=5 and settler_job[i]=='builder' and len(settler_x)>len(house_x):
+        if settler_inv_wood[i]>=5 and settler_job[i]=='builder' and (len(settler_x)+len(settler_baby_x)*0.25)>len(house_x):
             for j in range(0,len(settler_home)):
                  if not settler_home[j]:
                            settler_home[j]=1
@@ -745,9 +801,11 @@ class settler:
         settler_hunger.pop(i)
         settler_health.pop(i)
         settler_sheltered.pop(i)
+        settler_social.pop(i)
         settler_happiness.pop(i)
         settler_gender.pop(i)
         settler_job.pop(i)
+        settler_age.pop(i)
         for j in range(0,len(settler_x)):
             if settler_happiness[j]>5:
                 settler_happiness[j]=settler_happiness[j]-5
@@ -764,7 +822,10 @@ class settler:
          settler_hunger.append(0)
          settler_health.append(100)
          settler_sheltered.append(0)
-         settler_happiness.append(100)
+         settler_social.append([])
+         if avg_happiness!='-': settler_happiness.append(avg_happiness)
+         else: settler_happiness.append(100)
+         settler_age.append(6300)
          r=random.random()
          r_job=random.randint(0,2)
          if r>.5:
@@ -1153,6 +1214,7 @@ while not done:
     if fertility<0.5: fertility=fertility+0.0001
     
     pop=len(settler_x)
+    pop_ch=len(settler_baby_x)
     homes=len(house_x)
     if len(settler_health)==0: avg_health='-'
     else: avg_health=int(sum(settler_health)/len(settler_health))
@@ -1160,9 +1222,11 @@ while not done:
     if len(settler_happiness)==0: avg_happiness='-'
     else: avg_happiness=int(sum(settler_happiness)/len(settler_happiness))
 
+    if len(settler_age)==0: avg_age='-'
+    else: avg_age=int((sum(settler_age)+sum(settler_baby_age))/(len(settler_age)+len(settler_baby_age))*(15/6300))
     if len(animal_fertility)==0: avg_an_fert='-'
     else: avg_an_fert=int(sum(animal_fertility)/len(animal_fertility))
-    pygame.display.set_caption("Avg Animal Fertility: "+str(avg_an_fert)+" | Pop/homes: "+str(pop)+" / "+str(homes)+" | Temp: "+str(temp)+"°F | Avg Health: "+str(avg_health)+"%"+" | Avg Happiness: "+str(avg_happiness))
+    pygame.display.set_caption("Pop/homes: "+str(pop)+"("+str(pop_ch)+")"+" / "+str(homes)+" | Temp: "+str(temp)+"°F | Avg Age: "+str(avg_age)+" | Avg Health: "+str(avg_health)+"%"+" | Avg Happiness: "+str(avg_happiness))
     pygame.display.flip()
     t=t+1
 pygame.quit()
