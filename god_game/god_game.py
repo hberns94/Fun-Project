@@ -3,6 +3,8 @@ import random
 import math
 import os
 import winsound
+import names
+
 # Initialize the game engine
 pygame.init()
  
@@ -25,7 +27,15 @@ done = False
 clock = pygame.time.Clock()
 
 t=0
+t_n=0
+t_n_r=0
+len_old=0
+notif_text=''
+rect_length_notif=0
+space_text=''
 
+YEAR=6300
+year_count=0
 
 land_x=[]
 land_y=[]
@@ -55,15 +65,22 @@ settler_baby_y=[]
 settler_baby_parent=[]
 settler_baby_age=[]
 settler_baby_grown=[]
+settler_baby_name=[]
 settler_happiness=[]
 settler_gender=[]
 settler_job=[]
 settler_age=[]
 settler_social=[]
+settler_name=[]
+settler_morality=[]
 tree_x=[]
 tree_y=[]
 house_x=[]
 house_y=[]
+boat_x=[]
+boat_y=[]
+boat_landed=[]
+boat_otw=0
 church_stage=0
 church_x=0
 church_y=0
@@ -84,7 +101,8 @@ cloud_cap=[]
 rain_x=[]
 rain_y=[]
 rain_fall=[]
-
+notification=[]
+font=pygame.font.SysFont('timesnewroman',  10)
 
 r_l=10
 mod=0.3
@@ -97,7 +115,7 @@ resource_path = os.path.join(current_path, 'resources') # The resource folder pa
 image_path = os.path.join(resource_path, 'images') # The image folder path
 sound_path = os.path.join(resource_path, 'sounds')
 
-background_music=(os.path.join(sound_path, 'background.wav'))
+background_music=(os.path.join(sound_path, 'background2.wav'))
 
 winsound.PlaySound(background_music, winsound.SND_LOOP + winsound.SND_ASYNC)
 
@@ -120,6 +138,7 @@ image_farm_st1 = pygame.image.load(os.path.join(image_path, 'farm_st1.png')).con
 image_farm_st2 = pygame.image.load(os.path.join(image_path, 'farm_st2.png')).convert_alpha()
 image_farm_st3 = pygame.image.load(os.path.join(image_path, 'farm_st3.png')).convert_alpha()
 image_grain = pygame.image.load(os.path.join(image_path, 'grain.png')).convert_alpha()
+image_boat = pygame.image.load(os.path.join(image_path, 'boat.png')).convert_alpha()
 
 def cal_Dist(x1,y1,x2,y2):  
      dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)  
@@ -223,7 +242,9 @@ def render_grain(grain_x,grain_y):
     for i in range(0,len(grain_x)):
         screen.blit(image_grain, (grain_x[i]-4, grain_y[i]-9))
 
-
+def render_boat(boat_x,boat_y):
+    for i in range(0,len(boat_x)):
+        screen.blit(image_boat, (boat_x[i]-13, boat_y[i]-19))
     
             
 
@@ -264,7 +285,8 @@ class player:
     def spawn_settler():
         x_m,y_m=pygame.mouse.get_pos()
         if pygame.key.get_pressed()[32]:
-            settler.born(x_m,y_m)
+            last_name=[names.get_last_name(), names.get_last_name()]   
+            settler.born(x_m,y_m,last_name)
     def spawn_cloud():
         x_m,y_m=pygame.mouse.get_pos()
         if pygame.key.get_pressed()[99]:
@@ -288,11 +310,12 @@ class settler:
         global windmill_y
         global animal_food
         global grain_food
+        
         for i in range(0,len(settler_x)):
             x_mod=0
             y_mod=0
             settler_sheltered[i]=0
-            
+            death_notifed=0
             if not check_land(settler_x[i],settler_y[i]):#seek land
               
                 x_dest=0
@@ -399,12 +422,12 @@ class settler:
 
                 if cal_Dist(settler_x[i],settler_y[i],x_dest,y_dest)<3:
                     settler_sheltered[i]=1
-                    if settler_hunger[i]<1000 and settler_age[i]<63000*0.5 and settler_health[i]<100: settler_health[i]=settler_health[i]+1
+                    if settler_hunger[i]<1000 and settler_age[i]<YEAR*10*0.5 and settler_health[i]<100: settler_health[i]=settler_health[i]+1
                     x_mod=x_mod*3
                     y_mod=y_mod*3
   
 
-            elif len(animal_x)>2 and settler_job[i]=='hunter' and (sum(settler_hunger)/len(settler_hunger))>750 and len(animal_dead_x)<1: #seek to hunt when people are hungry
+            elif len(animal_x)>2 and settler_job[i]=='hunter' and len([k for k, e in enumerate(settler_hunger) if e > 500])>0 and len(animal_dead_x)<1: #seek to hunt when people are hungry
                     dist_short=9999
                     for j in range(0,len(animal_x)):
                         dist=cal_Dist(settler_x[i],settler_y[i],animal_x[j],animal_y[j])
@@ -546,11 +569,12 @@ class settler:
                     settler_dead_buried[dead_short]=1
 
 
-            elif len(house_x)>=len(settler_x) and settler_age[i]<63000*0.35 and settler_happiness[i]>50 and settler_gender[i] and len(settler_x)>1 and len([k for k, e in enumerate(settler_gender) if e == 0])>len(settler_baby_parent)  : #seak mate
+            elif len(house_x)>=len(settler_x) and settler_age[i]<YEAR*10*0.35 and settler_happiness[i]>50 and settler_gender[i] and len(settler_x)>1 and len([k for k, e in enumerate(settler_gender) if e == 0])>len(settler_baby_parent)  : #seak mate
                 dist_short=9999
                 for j in range(0,len(settler_x)):
+                    
                     dist=cal_Dist(settler_x[i],settler_y[i],settler_x[j],settler_y[j])
-                    if dist<dist_short and not settler_gender[j] and j not in settler_baby_parent and settler_age[j]<63000*0.35:
+                    if dist<dist_short and not settler_gender[j] and j not in settler_baby_parent and settler_age[j]<YEAR*10*0.35 and not any(item in settler_name[i][1] for item in settler_name[j][1]):
                          dist_short=dist
                          x_dest=settler_x[j]
                          y_dest=settler_y[j]
@@ -570,7 +594,11 @@ class settler:
                 if dist_short<3:
                     settler_baby_parent.append(settler_short)
                     #print(settler_age[i]*(15/6300), settler_age[j]*(15/6300))
-                    settler_baby.born(x_dest,y_dest)
+                    last_name=[settler_name[i][1][0], settler_name[settler_short][1][0]]
+                    notification.append("The "+last_name[0]+" family has a new member")
+                    print("The "+last_name[0]+" family has a new member")
+                    print(settler_name[i][1][0]+"-"+settler_name[i][1][1]+" and "+settler_name[settler_short][1][0]+"-"+settler_name[settler_short][1][1])
+                    settler_baby.born(x_dest,y_dest,last_name)
             elif windmill_stage<2 and len(land_farm_i)>5 and settler_job[i]=='builder': #seek to build windmill
                  if settler_inv_wood[i]<5 and len(tree_x)>1:
                     dist_short=9999
@@ -710,12 +738,12 @@ class settler:
 
                  if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
                      settler_sheltered[i]=1
-                     settler_health[i]=100
+                     if settler_hunger[i]<1000 and settler_age[i]<YEAR*10*0.5 and settler_health[i]<100: settler_health[i]=settler_health[i]+1
                      x_mod=x_mod*3
                      y_mod=y_mod*3
                      if settler_happiness[i]<100:
                          settler_happiness[i]=settler_happiness[i]+0.1
-            elif len(settler_x)>1: #seek to socialize when bored
+            elif len(settler_x)>1 and t%10==0: #seek to socialize when bored
                  dist_short=9999
                  for j in range(0,len(settler_x)):
                      dist=cal_Dist(settler_x[i],settler_y[i],settler_x[j],settler_y[j])
@@ -737,13 +765,45 @@ class settler:
                           y_mod=mod*-1
 
                  if dist_short<7:
-                     if settler_happiness[i]<100: settler_happiness[i]=settler_happiness[i]+0.1
+                     if settler_happiness[i]<100: settler_happiness[i]=settler_happiness[i]+0.5
                      settler_social[i].append(settler_short)
                      if len(settler_social[i])>(len(settler_x)-2)*10: settler_social[i]=[]
-                  
-
-            
-            x_r=random.random()
+                     r_social_action=random.random()
+                     if settler_inv_food[i]>1 and settler_morality[i]>65 and settler_inv_food[i]>settler_inv_food[settler_short] and r_social_action>0.5:
+                          settler_inv_food[i]=settler_inv_food[i]-1
+                          settler_inv_food[settler_short]=settler_inv_food[settler_short]+1
+                          if settler_happiness[i]+5<100: settler_happiness[i]=settler_happiness[i]+5
+                          else: settler_happiness[i]=100
+                          if settler_happiness[i]+10<100: settler_happiness[settler_short]=settler_happiness[settler_short]+10
+                          else: settler_happiness[settler_short]=100
+                          #notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" just gave food to "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0])
+                          print(settler_name[i][0]+" "+settler_name[i][1][0]+"(Morality:"+str(settler_morality[i])+") "+"just gave food to "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0])
+                     if settler_morality[i]<35 and settler_inv_food[settler_short]>0 and r_social_action>0.5:
+                          settler_inv_food[i]=settler_inv_food[i]+1
+                          settler_inv_food[settler_short]=settler_inv_food[settler_short]-1
+                          if settler_happiness[i]+5<100: settler_happiness[i]=settler_happiness[i]+5
+                          else: settler_happiness[i]=100
+                          if settler_happiness[i]-10>0: settler_happiness[settler_short]=settler_happiness[settler_short]-10
+                          else: settler_happiness[settler_short]=0
+                          #notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" stole food from "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0])
+                          print(settler_name[i][0]+" "+settler_name[i][1][0]+"(Morality:"+str(settler_morality[i])+") "+"stole food from "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0])
+                          r_caught=random.random()
+                          if r_caught<0.2:
+                               r_die=random.random()
+                               if settler_health[i]>100*r_die:
+                                    settler_health[i]=settler_health[i]-int(100*r_die)
+                                    settler_happiness[i]=0
+                                    notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" took "+str(int(100*r_die))+" damage from "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0]+" for stealing")
+                                    print(settler_name[i][0]+" "+settler_name[i][1][0]+" took "+str(int(100*r_die))+" damage from "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0]+" for stealing")
+                                    settler_inv_food[i]=settler_inv_food[i]-1
+                                    settler_inv_food[settler_short]=settler_inv_food[settler_short]+1
+                               else:
+                                    settler_health[i]=0
+                                    notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" was killed by "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0]+" for stealing")
+                                    print(settler_name[i][0]+" "+settler_name[i][1][0]+" was killed by "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0]+" for stealing")
+                                    death_notifed=1
+                                    settler_inv_food[settler_short]=settler_inv_food[settler_short]+settler_inv_food[i]
+            x_r=random.random()         
             y_r=random.random() 
             if x_r+x_mod<0.5:
                 settler_x[i]=settler_x[i]+1
@@ -758,10 +818,25 @@ class settler:
           
             settler.build(i)
             settler_age[i]=settler_age[i]+1
-            if temp<32 and not settler_sheltered[i]: settler_health[i]=settler_health[i]-0.1
-            if settler_hunger[i]>1000: settler_health[i]=settler_health[i]-0.1
-            if settler_age[i]>63000*0.5: settler_health[i]=settler_health[i]-0.1*random.randint(0,1)
-            if settler_age[i]>63000*0.35: settler_job[i]='retired'
+            if temp<32 and not settler_sheltered[i]:
+                 settler_health[i]=settler_health[i]-0.1
+                 if settler_health[i]<1 and not death_notifed:
+                      notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" froze to death")
+                      print(settler_name[i][0]+" "+settler_name[i][1][0]+" froze to death")
+                      death_notifed=1
+            if settler_hunger[i]>1000:
+                 settler_health[i]=settler_health[i]-0.1
+                 if settler_health[i]<1 and not death_notifed:
+                      notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" starved to death")
+                      print(settler_name[i][0]+" "+settler_name[i][1][0]+" starved to death")
+                      death_notifed=1
+            if settler_age[i]>YEAR*10*0.5:
+                 settler_health[i]=settler_health[i]-0.1*random.randint(0,1)
+                 if settler_health[i]<1 and not death_notifed:
+                      notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" died of old age")
+                      print(settler_name[i][0]+" "+settler_name[i][1][0]+" died of old age")
+                      death_notifed=1
+            if settler_age[i]>YEAR*10*0.35: settler_job[i]='retired'
             if settler_health[i]<1:
                 settler_dead_x.append(settler_x[i])
                 settler_dead_y.append(settler_y[i])
@@ -781,15 +856,22 @@ class settler:
     def build(i):
 
         if settler_inv_wood[i]>=5 and settler_job[i]=='builder' and (len(settler_x)+len(settler_baby_x)*0.25)>len(house_x):
-            for j in range(0,len(settler_home)):
-                 if not settler_home[j]:
-                           settler_home[j]=1
-                           break
+            no_build=0   
+            for j in range(0,len(house_x)):
+                 if cal_Dist(settler_x[i],settler_y[i],house_x[j],house_y[j])<10:
+                      no_build=1
+                      break
                       
-            house_x.append(settler_x[i])
-            house_y.append(settler_y[i])
-            settler_inv_wood[i]=settler_inv_wood[i]-5
-
+            if not no_build:       
+                 for j in range(0,len(settler_home)):
+                      if not settler_home[j]:
+                                settler_home[j]=1
+                                break
+                      
+                 house_x.append(settler_x[i])
+                 house_y.append(settler_y[i])
+                 settler_inv_wood[i]=settler_inv_wood[i]-5
+   
     def die(i):
         settler_dead_buried.append(0)
         settler_dead_gender.append(settler_gender[i])
@@ -806,11 +888,13 @@ class settler:
         settler_gender.pop(i)
         settler_job.pop(i)
         settler_age.pop(i)
+        settler_name.pop(i)
+        settler_morality.pop(i)
         for j in range(0,len(settler_x)):
             if settler_happiness[j]>5:
                 settler_happiness[j]=settler_happiness[j]-5
             else: settler_happiness[j]=0 
-    def born(x,y):
+    def born(x,y,last_name):
          settler_x.append(x)
          settler_y.append(y)
          if sum(settler_home)<len(house_x):
@@ -825,13 +909,18 @@ class settler:
          settler_social.append([])
          if avg_happiness!='-': settler_happiness.append(avg_happiness)
          else: settler_happiness.append(100)
-         settler_age.append(6300)
+         settler_age.append(YEAR)
          r=random.random()
          r_job=random.randint(0,2)
+         r_moral=random.gauss(50,15)
+         settler_morality.append(r_moral)
          if r>.5:
              settler_gender.append(0)
+             first_name=names.get_first_name(gender='female')
          else:
              settler_gender.append(1)
+             first_name=names.get_first_name(gender='male')
+         settler_name.append([first_name, last_name])
          if r_job==0: settler_job.append('farmer')
          elif r_job==1: settler_job.append('hunter')
          elif r_job==2: settler_job.append('builder')
@@ -1087,8 +1176,8 @@ class settler_baby:
                 settler_baby_y[i]=settler_baby_y[i]-1
 
             settler_baby_age[i]=settler_baby_age[i]+1
-            if settler_baby_age[i]>6300:
-                settler.born(settler_baby_x[i],settler_baby_y[i])
+            if settler_baby_age[i]>YEAR:
+                settler.born(settler_baby_x[i],settler_baby_y[i],settler_baby_name[i])
                 settler_baby_grown.append(i)
 
         for i in sorted(settler_baby_grown, reverse=True):
@@ -1096,12 +1185,14 @@ class settler_baby:
             settler_baby_y.pop(i)
             settler_baby_age.pop(i)
             settler_baby_parent.pop(i)
+            settler_baby_name.pop(i)
         settler_baby_grown=[]
         render_settler_baby(settler_baby_x,settler_baby_y)
-    def born(x,y):
+    def born(x,y,last_name):
         settler_baby_x.append(x)
         settler_baby_y.append(y)
         settler_baby_age.append(0)
+        settler_baby_name.append(last_name)
 
 class farm:
     def grow(land_farm_stage):
@@ -1177,13 +1268,73 @@ class cloud:
             rain_y.pop(i)
             rain_fall.pop(i)
         render_rain(rain_x,rain_y)
-        
+
+class boat:
+     
+     def next_move(boat_x,boat_y):
+          for i in range(0,len(boat_x)):
+            x_mod=0
+            y_mod=0
+            
+            if not check_land(boat_x[i],boat_y[i]) and i not in boat_landed:#seek land
+              
+                x_dest=0
+                y_dest=0
+                dist_short=9999
+                for j in range(0,len(land_x)):
+                    dist=cal_Dist(boat_x[i],boat_y[i],land_x[j],land_y[j])
+                    if dist<dist_short:
+                        dist_short=dist
+                        x_dest=land_x[j]
+                        y_dest=land_y[j]
+                  
+                if boat_x[i]-x_dest>0:
+                    x_mod=1
+                else:
+                    x_mod=-1
+
+                if boat_y[i]-y_dest>0:
+                    y_mod=1
+                else:
+                    y_mod=-1
+
+            if check_land(boat_x[i],boat_y[i]) and i not in boat_landed:
+                boat.landed(boat_x[i],boat_y[i])
+                boat_landed.append(i)
+            
+            if  x_mod<0.5:
+                boat_x[i]=boat_x[i]+1
+            else:
+                boat_x[i]=boat_x[i]-1
+
+            if  y_mod<0.5:
+                boat_y[i]=boat_y[i]+1
+            else:
+                boat_y[i]=boat_y[i]-1
+          render_boat(boat_x,boat_y)
+     def landed(x,y):
+          global boat_otw
+          r_landed=random.randint(3,8)
+          for i in range(0,r_landed):
+               last_name=[names.get_last_name(), names.get_last_name()]   
+               settler.born(x,y,last_name)
+               boat_otw=0
+          
+     def arrive():
+          global boat_otw
+          if (len(house_x)-len(settler_x)>5 or (len(settler_x)==0 and len(tree_x)>15)) and not boat_otw:
+               arrive_y=int(random.random()*size[1])
+               arrive_x=int(size[0]+20)
+               boat_x.append(arrive_x)
+               boat_y.append(arrive_y)
+               boat_otw=1
+          
 temp=int(50+50*math.sin(t))+random.randint(-5,5)        
 while not done:
  
     # This limits the while loop to a max of 10 times per second.
     # Leave this out and we will use all CPU we can.
-    clock.tick(100)
+    clock.tick(50)
      
     for event in pygame.event.get(): # User did something
         if event.type == pygame.QUIT: # If user clicked close
@@ -1194,7 +1345,7 @@ while not done:
      
     # Clear the screen and set the screen background
     screen.fill(BLUE)
-
+    
     if t%101==100:
         temp=int(50+50*math.sin(t/1000))+random.randint(-5,5)
 
@@ -1205,12 +1356,45 @@ while not done:
     player.spawn_cloud()
     settler.next_move(settler_x,settler_y)
     settler_baby.next_move(settler_baby_x,settler_baby_y)
+    boat.arrive()
+    boat.next_move(boat_x,boat_y)
     animal.next_move(animal_x,animal_y)
     farm.grow(land_farm_stage)
     tree.grow(tree_x,tree_y)
     house.built(house_x,house_y)
     cloud.rain(rain_x,rain_y)
     cloud.move(cloud_x,cloud_y)
+    
+    res = []
+    [res.append(x) for x in notification if x not in res]
+    notification=res
+    
+    if t%5==0:
+         notif_text=notif_text+'  '
+         space_text=space_text+'  '
+    len_old=len(notification)
+    
+    if len(notification)>0:
+
+         for i in notification:
+               if font.size(space_text)[0]>font.size("   "+i+"   ")[0]:
+                    notif_text=notif_text[:(len(notif_text)-len("   "+i+"   "))]+"   "+i+"   " 
+                    notification.remove(i)
+                    space_text=''
+               else: break
+
+    if font.size(notif_text)[0]>(size[0]+300):
+         notif_text=notif_text[1:]     
+    text = font.render(notif_text, True, RED, BLACK)
+    
+    textRect = text.get_rect()
+
+    textRect.topright = (size[0]+200, 0)
+    t_n_r+=1
+    screen.blit(text, textRect)
+
+    if t%YEAR==0: year_count+=1 
+    
     if fertility<0.5: fertility=fertility+0.0001
     
     pop=len(settler_x)
@@ -1223,10 +1407,11 @@ while not done:
     else: avg_happiness=int(sum(settler_happiness)/len(settler_happiness))
 
     if len(settler_age)==0: avg_age='-'
-    else: avg_age=int((sum(settler_age)+sum(settler_baby_age))/(len(settler_age)+len(settler_baby_age))*(15/6300))
+    else: avg_age=int((sum(settler_age)+sum(settler_baby_age))/(len(settler_age)+len(settler_baby_age))*(15/YEAR))
     if len(animal_fertility)==0: avg_an_fert='-'
     else: avg_an_fert=int(sum(animal_fertility)/len(animal_fertility))
-    pygame.display.set_caption("Pop/homes: "+str(pop)+"("+str(pop_ch)+")"+" / "+str(homes)+" | Temp: "+str(temp)+"°F | Avg Age: "+str(avg_age)+" | Avg Health: "+str(avg_health)+"%"+" | Avg Happiness: "+str(avg_happiness))
+    pygame.display.set_caption("Pop/homes: "+str(pop)+"("+str(pop_ch)+")"+" / "+str(homes)+" | Temp: "+str(temp)+"°F | Avg Age: "+str(avg_age)+" | Avg Health: "+str(avg_health)+"%"+" | Avg Happiness: "+str(avg_happiness)+" | Year: "+str(year_count))
     pygame.display.flip()
+     
     t=t+1
 pygame.quit()
