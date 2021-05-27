@@ -10,11 +10,12 @@ pygame.init()
  
 # Define the colors we will use in RGB format
 BLACK = (  0,   0,   0)
-WHITE = (255, 255, 255)
+WHITE = (240, 240, 236)
 GREY = (127, 127, 127)
-BLUE =  (  0,   0, 255)
-GREEN = (  0, 255,   0)
+BLUE =  (0, 119, 190)
+GREEN = (89, 166, 8)
 RED =   (255,   0,   0)
+TAN = 	(194, 178, 128)
  
 # Set the height and width of the screen
 size = [720, 480]
@@ -85,9 +86,9 @@ church_stage=0
 church_x=0
 church_y=0
 church_rendered=0
-windmill_stage=0
-windmill_x=0
-windmill_y=0
+windmill_stage=[]
+windmill_x=[]
+windmill_y=[]
 animal_x=[20, 21]
 animal_y=[20, 21]
 animal_fertility=[100, 100]
@@ -173,10 +174,11 @@ def render_land(land_x,land_y):
     st1_render=[]
     st2_render=[]
     st3_render=[]
-    if temp>32: color=GREEN
-    else: color=WHITE
+
     for i in range(0,len(land_x)):
-        
+        if len(land_hitbox[i].collidelistall(land_hitbox))<=5: color=TAN
+        elif temp>32: color=GREEN
+        else: color=WHITE
         pygame.draw.rect(screen,color,land_hitbox[i])
         if land_farm_stage[i]>1 and land_farm_stage[i]<2 :
              st1_render.append(i)
@@ -222,12 +224,13 @@ def render_buildings(house_x,house_y,render_order,church_x,church_y,windmill_x,w
             elif church_stage<2 and church_stage>1:
                screen.blit(image_church_st2, (church_x-8, church_y-28))
             elif church_stage>2: screen.blit(image_church, (church_x-8, church_y-28))
-        elif i ==len(house_x)+int(church_stage>0)+int(windmill_stage>0)-1 and windmill_stage>0:
-            if windmill_stage<1:
-               screen.blit(image_church_st1, (windmill_x-8, windmill_y-28))
-            elif windmill_stage<2 and windmill_stage>1:
-               screen.blit(image_windmill_st2, (windmill_x-8, windmill_y-28))
-            elif windmill_stage>2: screen.blit(image_windmill, (windmill_x-8, windmill_y-28))   
+        elif i >len(house_x)+int(church_stage>0)-1:
+             j=i-len(house_x)-int(church_stage>0)
+             if windmill_stage[j]<1 and windmill_stage[j]>0:
+                  screen.blit(image_church_st1, (windmill_x[j]-8, windmill_y[j]-28))
+             elif windmill_stage[j]<2 and windmill_stage[j]>=1:
+                  screen.blit(image_windmill_st2, (windmill_x[j]-8, windmill_y[j]-28))
+             elif windmill_stage[j]>=2: screen.blit(image_windmill, (windmill_x[j]-8, windmill_y[j]-28))   
 
 
 def render_animal(animal_x,animal_y):
@@ -309,7 +312,7 @@ class settler:
         global windmill_x
         global windmill_y
         global animal_food
-        global grain_food
+        global grain_food  
         
         for i in range(0,len(settler_x)):
             x_mod=0
@@ -482,7 +485,7 @@ class settler:
                 dist_short=9999
                 for j in range(0,len(land_x)):
                     dist=cal_Dist(settler_x[i],settler_y[i],land_x[j],land_y[j])
-                    if dist<dist_short and j not in land_farm_i:
+                    if dist<dist_short and j not in land_farm_i and len(land_hitbox[j].collidelistall(land_hitbox))>5:
                         dist_short=dist
                         x_dest=land_x[j]
                         y_dest=land_y[j]
@@ -599,7 +602,7 @@ class settler:
                     print("The "+last_name[0]+" family has a new member")
                     print(settler_name[i][1][0]+"-"+settler_name[i][1][1]+" and "+settler_name[settler_short][1][0]+"-"+settler_name[settler_short][1][1])
                     settler_baby.born(x_dest,y_dest,last_name)
-            elif windmill_stage<2 and len(land_farm_i)>5 and settler_job[i]=='builder': #seek to build windmill
+            elif (((len(land_farm_i)>len(windmill_stage)*5 and len(land_farm_i)>4) or len([k for k, e in enumerate(windmill_stage) if e < 2])>0)) and settler_job[i]=='builder':#seek to build windmill 
                  if settler_inv_wood[i]<5 and len(tree_x)>1:
                     dist_short=9999
                     for j in range(0,len(tree_x)):
@@ -624,43 +627,47 @@ class settler:
                     if dist_short<3:
                          settler_inv_wood[i]=settler_inv_wood[i]+1
                          tree.chop(tree_short)
-                 elif windmill_stage==0 and settler_inv_wood[i]>=5:
-                    farm_x=[land_x[k] for k in land_farm_i]
-                    farm_y=[land_y[k] for k in land_farm_i]
-                    cent=find_centroid(farm_x,farm_y)
-                    x_dest=cent[0]
-                    y_dest=cent[1]
-                    if settler_x[i]-x_dest>0:
-                         x_mod=mod
-                    else:
-                         x_mod=mod*-1
 
-                    if settler_y[i]-y_dest>0:
-                         y_mod=mod
-                    else:
-                         y_mod=mod*-1
 
-                    if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
-                        windmill_x=x_dest
-                        windmill_y=y_dest
-                        settler_inv_wood[i]=settler_inv_wood[i]-5
-                        windmill_stage=.1
-                 elif windmill_stage>0 and windmill_stage<2 and settler_inv_wood[i]>=5:
-                    x_dest=windmill_x
-                    y_dest=windmill_y
-                    if settler_x[i]-x_dest>0:
-                         x_mod=mod
-                    else:
-                         x_mod=mod*-1
+                 elif settler_inv_wood[i]>=5:
+                      if len([k for k, e in enumerate(windmill_stage) if e < 2])==0 or len(windmill_stage)==0: windmill_stage.append(-1)
+                     
+                      for j in range(0,len(windmill_stage)):
+                           if windmill_stage[j]==-1:
+                                windmill_stage[j]=0
+                                farm_x=[land_x[k] for k in land_farm_i]
+                                farm_y=[land_y[k] for k in land_farm_i]
+                                cent=find_centroid(farm_x[len(farm_x)-5:],farm_y[len(farm_y)-5:])
+                                x_dest=cent[0]
+                                y_dest=cent[1]
+                           
+                                windmill_x.append(x_dest)
+                                windmill_y.append(y_dest)
+                                j_dest=j
+                                
+             
 
-                    if settler_y[i]-y_dest>0:
-                         y_mod=mod
-                    else:
-                         y_mod=mod*-1
+                           elif windmill_stage[j]>=0 and windmill_stage[j]<2:
+                                x_dest=windmill_x[j]
+                                y_dest=windmill_y[j]
+                                j_dest=j
+          
 
-                    if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
-                        windmill_stage=windmill_stage+.1
-                        settler_inv_wood[i]=settler_inv_wood[i]-5
+                           
+                      if settler_x[i]-x_dest>0:
+                           x_mod=mod
+                      else:
+                           x_mod=mod*-1
+
+                      if settler_y[i]-y_dest>0:
+                           y_mod=mod
+                      else:
+                           y_mod=mod*-1
+
+                      if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
+                           settler_inv_wood[i]=settler_inv_wood[i]-5
+                           windmill_stage[j_dest]+=.5
+                 
             elif church_stage<2 and len(house_x)>30 and settler_job[i]=='builder': #seek to build church
                  if settler_inv_wood[i]<5 and len(tree_x)>1:
                     dist_short=9999
@@ -861,6 +868,10 @@ class settler:
                  if cal_Dist(settler_x[i],settler_y[i],house_x[j],house_y[j])<10:
                       no_build=1
                       break
+            for j in land_farm_i:
+                    if land_hitbox[j].collidepoint(settler_x[i],settler_y[i]):
+                      no_build=1
+                      break
                       
             if not no_build:       
                  for j in range(0,len(settler_home)):
@@ -932,9 +943,9 @@ class tree:
         if len(tree_x)<int(len(land_x)*fertility) and len(land_x)>100:
             ran=random.random()
             i_ran=int(len(land_x)*ran)
-            
-            tree_x.append(land_x[i_ran])
-            tree_y.append(land_y[i_ran])
+            if len(land_hitbox[i_ran].collidelistall(land_hitbox))>5:
+                 tree_x.append(land_x[i_ran])
+                 tree_y.append(land_y[i_ran])
         for i in range(0,len(tree_x)):
             if not check_land(tree_x[i],tree_y[i]):
                 tree_x[i]=-10
@@ -956,7 +967,6 @@ class tree:
 
 class house:
     def built(house_x,house_y):
-
         i_house=[]
         for i in range(0,len(house_x)):
             
@@ -973,12 +983,11 @@ class house:
                 i_h=i_h+1
         if -10 in house_x: house_x.remove(-10)
         if -10 in house_y: house_y.remove(-10)
-       
+        
         buildings_y=house_y
         if church_stage>0:
-            buildings_y=buildings_y+[church_y]
-        if windmill_stage>0:
-            buildings_y=buildings_y+[windmill_y]
+            buildings_y=buildings_y+[church_y]    
+        buildings_y=buildings_y+windmill_y
         render_order=sorted(range(len(buildings_y)), key=lambda k: buildings_y[k])
         render_buildings(house_x,house_y,render_order,church_x,church_y,windmill_x,windmill_y)
     
@@ -1221,9 +1230,8 @@ class farm:
         land_farm_stage[i]=1
         grain_x.append(land_x[i])
         grain_y.append(land_y[i])
-        if windmill_stage>2:
-            grain_food.append(40)
-        else: grain_food.append(20)
+        wm_mult=sum(windmill_stage)*5
+        grain_food.append(20+wm_mult)
 
 
 class cloud:
@@ -1328,6 +1336,22 @@ class boat:
                boat_x.append(arrive_x)
                boat_y.append(arrive_y)
                boat_otw=1
+
+
+
+
+for i in range(0,10000):
+     x_r=int(random.gauss(size[0]/2,50))
+     y_r=int(random.gauss(size[1]/2,50))
+     rect_r=pygame.Rect(x_r-r_l,y_r-r_l,2*r_l,2*r_l)
+     if not check_land(x_r,y_r) and (len(rect_r.collidelistall(land_hitbox))>=2 or len(land_hitbox)<10) :
+            land_x.append(x_r)
+            land_y.append(y_r)
+            land_hitbox.append(pygame.Rect(x_r-r_l,y_r-r_l,2*r_l,2*r_l))
+            land_farm_stage.append(0)
+            land_snow.append(0)
+
+
           
 temp=int(50+50*math.sin(t))+random.randint(-5,5)        
 while not done:
@@ -1405,7 +1429,7 @@ while not done:
 
     if len(settler_happiness)==0: avg_happiness='-'
     else: avg_happiness=int(sum(settler_happiness)/len(settler_happiness))
-
+ 
     if len(settler_age)==0: avg_age='-'
     else: avg_age=int((sum(settler_age)+sum(settler_baby_age))/(len(settler_age)+len(settler_baby_age))*(15/YEAR))
     if len(animal_fertility)==0: avg_an_fert='-'
