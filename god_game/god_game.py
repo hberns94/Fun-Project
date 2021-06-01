@@ -4,6 +4,8 @@ import math
 import os
 import winsound
 import names
+import numpy as np
+from sklearn.cluster import KMeans
 
 # Initialize the game engine
 pygame.init()
@@ -28,9 +30,11 @@ done = False
 clock = pygame.time.Clock()
 
 t=0
+t_cloud=0
 t_n=0
 t_n_r=0
 len_old=0
+t_boat=0
 notif_text=''
 rect_length_notif=0
 space_text=''
@@ -45,6 +49,7 @@ land_farm_stage=[]
 land_farm_i=[]
 land_farm_tended=[]
 land_snow=[]
+land_tread=[]
 grain_x=[]
 grain_y=[]
 grain_food=[]
@@ -74,10 +79,14 @@ settler_age=[]
 settler_social=[]
 settler_name=[]
 settler_morality=[]
+settler_sick=[]
+settler_drunk=[]
+settler_status=[]
 tree_x=[]
 tree_y=[]
 house_x=[]
 house_y=[]
+house_upgrade=[]
 boat_x=[]
 boat_y=[]
 boat_landed=[]
@@ -89,8 +98,11 @@ church_rendered=0
 windmill_stage=[]
 windmill_x=[]
 windmill_y=[]
-animal_x=[20, 21]
-animal_y=[20, 21]
+tavern_stage=[]
+tavern_x=[]
+tavern_y=[]
+animal_x=[int(size[0]/2),int(size[1]/2)]
+animal_y=[int(size[0]/2),int(size[1]/2)]
 animal_fertility=[100, 100]
 animal_dead_x=[]
 animal_dead_y=[]
@@ -99,6 +111,7 @@ cloud_x=[]
 cloud_y=[]
 cloud_storm=[]
 cloud_cap=[]
+cloud_spawner_bool=0
 rain_x=[]
 rain_y=[]
 rain_fall=[]
@@ -122,11 +135,15 @@ winsound.PlaySound(background_music, winsound.SND_LOOP + winsound.SND_ASYNC)
 
 image_settler = pygame.image.load(os.path.join(image_path, 'settler.png')).convert_alpha()
 image_settler_f = pygame.image.load(os.path.join(image_path, 'settler_f.png')).convert_alpha()
+image_settler_sick = pygame.image.load(os.path.join(image_path, 'settler_sick.png')).convert_alpha()
+image_settler_f_sick = pygame.image.load(os.path.join(image_path, 'settler_f_sick.png')).convert_alpha()
 image_settler_dead = pygame.image.load(os.path.join(image_path, 'settler_dead.png')).convert_alpha()
 image_settler_dead_f = pygame.image.load(os.path.join(image_path, 'settler_dead_f.png')).convert_alpha()
 image_settler_baby = pygame.image.load(os.path.join(image_path, 'settler_baby.png')).convert_alpha()
 image_tree = pygame.image.load(os.path.join(image_path, 'tree.png')).convert_alpha()
 image_house = pygame.image.load(os.path.join(image_path, 'house.png')).convert_alpha()
+image_house_st2 = pygame.image.load(os.path.join(image_path, 'house_st2.png')).convert_alpha()
+image_house_st3 = pygame.image.load(os.path.join(image_path, 'house_st3.png')).convert_alpha()
 image_animal = pygame.image.load(os.path.join(image_path, 'animal.png')).convert_alpha()
 image_meat  = pygame.image.load(os.path.join(image_path, 'meat.png')).convert_alpha()
 image_grave = pygame.image.load(os.path.join(image_path, 'grave.png')).convert_alpha()
@@ -140,6 +157,7 @@ image_farm_st2 = pygame.image.load(os.path.join(image_path, 'farm_st2.png')).con
 image_farm_st3 = pygame.image.load(os.path.join(image_path, 'farm_st3.png')).convert_alpha()
 image_grain = pygame.image.load(os.path.join(image_path, 'grain.png')).convert_alpha()
 image_boat = pygame.image.load(os.path.join(image_path, 'boat.png')).convert_alpha()
+image_tavern = pygame.image.load(os.path.join(image_path, 'tavern.png')).convert_alpha()
 
 def cal_Dist(x1,y1,x2,y2):  
      dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)  
@@ -150,11 +168,14 @@ def find_centroid(x,y):
     return centroid
 
 
-def check_land(x,y):
-    for rect in land_hitbox:
+def check_land(x,y,settler_tread_bool): 
+    for i in range(0,len(land_hitbox)):
+        rect=land_hitbox[i] 
         if rect.collidepoint(x,y):
+            if settler_tread_bool: land_tread[i]=land_tread[i]+.1
             return rect.collidepoint(x,y)
             break
+         
 
 def render_cloud(cloud_x,cloud_y):
     for i in range(0,len(cloud_x)):
@@ -177,7 +198,9 @@ def render_land(land_x,land_y):
 
     for i in range(0,len(land_x)):
         if len(land_hitbox[i].collidelistall(land_hitbox))<=5: color=TAN
-        elif temp>32: color=GREEN
+        elif temp>32:
+             if 89+land_tread[i]<180 and 8+land_tread[i]<100: color=(int(89+land_tread[i]), 166,int(8 +land_tread[i]))
+             else: color=(180, 135, 100)
         else: color=WHITE
         pygame.draw.rect(screen,color,land_hitbox[i])
         if land_farm_stage[i]>1 and land_farm_stage[i]<2 :
@@ -197,8 +220,11 @@ def render_land(land_x,land_y):
 def render_settler(settler_x,settler_y):
     for i in range(0,len(settler_x)):
         if settler_gender[i]==1:
-            screen.blit(image_settler, (settler_x[i]-1, settler_y[i]-9))
-        else: screen.blit(image_settler_f, (settler_x[i]-1, settler_y[i]-9)) 
+             if settler_sick[i]: screen.blit(image_settler_sick, (settler_x[i]-1, settler_y[i]-9))
+             else: screen.blit(image_settler, (settler_x[i]-1, settler_y[i]-9))
+        else:
+             if settler_sick[i]: screen.blit(image_settler_f_sick, (settler_x[i]-1, settler_y[i]-9))
+             else: screen.blit(image_settler_f, (settler_x[i]-1, settler_y[i]-9))
 
 def render_settler_baby(settler_x,settler_y):
     for i in range(0,len(settler_baby_x)):
@@ -217,21 +243,28 @@ def render_tree(tree_x,tree_y):
 def render_buildings(house_x,house_y,render_order,church_x,church_y,windmill_x,windmill_y):
     for i in render_order:
 
-        if i in range(0,len(house_x)): screen.blit(image_house, (house_x[i]-6, house_y[i]-18))
+        if i in range(0,len(house_x)):
+             if house_upgrade[i]<2: screen.blit(image_house, (house_x[i]-6, house_y[i]-18))
+             elif house_upgrade[i]<4: screen.blit(image_house_st2, (house_x[i]-6, house_y[i]-22))
+             else: screen.blit(image_house_st3, (house_x[i]-6, house_y[i]-24))
         if i ==len(house_x)+int(church_stage>0)-1 and church_stage>0:
             if church_stage<1:
                screen.blit(image_church_st1, (church_x-8, church_y-28))
             elif church_stage<2 and church_stage>1:
                screen.blit(image_church_st2, (church_x-8, church_y-28))
             elif church_stage>2: screen.blit(image_church, (church_x-8, church_y-28))
-        elif i >len(house_x)+int(church_stage>0)-1:
+        elif i >len(house_x)+int(church_stage>0)-1 and i<len(house_x)+int(church_stage>0)-1+len(windmill_stage):
              j=i-len(house_x)-int(church_stage>0)
              if windmill_stage[j]<1 and windmill_stage[j]>0:
                   screen.blit(image_church_st1, (windmill_x[j]-8, windmill_y[j]-28))
              elif windmill_stage[j]<2 and windmill_stage[j]>=1:
                   screen.blit(image_windmill_st2, (windmill_x[j]-8, windmill_y[j]-28))
              elif windmill_stage[j]>=2: screen.blit(image_windmill, (windmill_x[j]-8, windmill_y[j]-28))   
-
+        elif i >len(house_x)+int(church_stage>0)-1+len(windmill_stage):
+             j=i-len(house_x)-int(church_stage>0)-len(windmill_stage)
+             if tavern_stage[j]<1 and tavern_stage[j]>0:
+                  screen.blit(image_church_st1, (tavern_x[j]-8, tavern_y[j]-28))
+             elif tavern_stage[j]>=1: screen.blit(image_tavern, (tavern_x[j]-8, tavern_y[j]-20))   
 
 def render_animal(animal_x,animal_y):
     for i in range(0,len(animal_x)):
@@ -257,12 +290,13 @@ class player:
         mouse_clk=pygame.mouse.get_pressed()
         x_m,y_m=pygame.mouse.get_pos()
 
-        if mouse_clk[0] and not check_land(x_m,y_m):
+        if mouse_clk[0] and not check_land(x_m,y_m,0):
             land_x.append(x_m)
             land_y.append(y_m)
             land_hitbox.append(pygame.Rect(x_m-r_l,y_m-r_l,2*r_l,2*r_l))
             land_farm_stage.append(0)
             land_snow.append(0)
+            land_tread.append(0)
             
         del_i=[]
         
@@ -297,7 +331,20 @@ class player:
             cloud_y.append(y_m)
             cloud_storm.append(0)
             cloud_cap.append(20)
-         
+    def get_info():
+         x_m,y_m=pygame.mouse.get_pos()
+         info_vis=0
+          
+         for i in range(0,len(settler_x)):
+              if cal_Dist(x_m,y_m,settler_x[i],settler_y[i])<10 and info_vis==0:
+                   status_str=str(int(settler_status[i]))+' stars'
+                   text = font.render(settler_name[i][0]+" "+settler_name[i][1][0]+"  Age: "+str(int(settler_age[i]*(15/YEAR)))+" Job: "+settler_job[i]+" Status: "+status_str, True, RED, BLACK)   
+                   textRect = text.get_rect()
+                   textRect.bottomleft = (x_m, y_m)
+                   screen.blit(text, textRect)
+                   info_vis=1
+                   break
+              
 
               
 
@@ -319,7 +366,7 @@ class settler:
             y_mod=0
             settler_sheltered[i]=0
             death_notifed=0
-            if not check_land(settler_x[i],settler_y[i]):#seek land
+            if not check_land(settler_x[i],settler_y[i],1):#seek land
               
                 x_dest=0
                 y_dest=0
@@ -400,7 +447,13 @@ class settler:
                         y_mod=mod*-1
 
                     if dist_short<3:
+                        r_disease=random.random()
+                        if r_disease<0.1:
+                             settler_sick[i]=1
+                             notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" caught a disease")
+                             print(settler_name[i][0]+" "+settler_name[i][1][0]+" caught a disease")
                         animal.hunted(animal_short)
+                        if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
                     
                     
             elif settler_home[i] and (temp<32 or settler_health[i]<50) and not settler_sheltered[i]: #seek shelter when cold
@@ -412,6 +465,8 @@ class settler:
                    
                 x_dest=house_x[i_h]
                 y_dest=house_y[i_h]
+                
+
                  
                 if settler_x[i]-x_dest>0:
                     x_mod=mod
@@ -424,8 +479,15 @@ class settler:
                     y_mod=mod*-1
 
                 if cal_Dist(settler_x[i],settler_y[i],x_dest,y_dest)<3:
+                    if settler_job[i]=='leader' and house_upgrade[i_h]==0:
+                         house_upgrade[i_h]=1
+                         print(house_upgrade)
+                    if settler_job[i]=='leader' and settler_status[i] > 4 and house_upgrade[i_h]==2:
+                         house_upgrade[i_h]=3
                     settler_sheltered[i]=1
-                    if settler_hunger[i]<1000 and settler_age[i]<YEAR*10*0.5 and settler_health[i]<100: settler_health[i]=settler_health[i]+1
+                    if settler_hunger[i]<1000 and settler_health[i]<100:
+                         if not settler_sick[i] and settler_age[i]<YEAR*10*0.5: settler_health[i]=settler_health[i]+1
+                         else: settler_health[i]=settler_health[i]+.01 
                     x_mod=x_mod*3
                     y_mod=y_mod*3
   
@@ -453,56 +515,96 @@ class settler:
                         y_mod=mod*-1
 
                     if dist_short<3:
-                        animal.hunted(animal_short)             
-                    
+                         r_disease=random.random()
+                         if r_disease<0.1:
+                             settler_sick[i]=1
+                             notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" caught a disease")
+                             print(settler_name[i][0]+" "+settler_name[i][1][0]+" caught a disease")
+                         animal.hunted(animal_short)             
+                         if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
     
-            elif (len(settler_x)+len(settler_baby_x)*0.25)>len(house_x) and len(tree_x)>1 and settler_job[i]=='builder':#seek material for shelter
+            elif ((len(settler_x)+len(settler_baby_x)*0.25)>len(house_x) or (len([k for k, e in enumerate(house_upgrade) if e==1])>0 or len([k for k, e in enumerate(house_upgrade) if e==3])>0))and len(tree_x)>1 and settler_job[i]=='builder':#seek material for shelter
 
-                dist_short=9999
-                for j in range(0,len(tree_x)):
-                    dist=cal_Dist(settler_x[i],settler_y[i],tree_x[j],tree_y[j])
-                    if dist<dist_short:
-                        dist_short=dist
-                        x_dest=tree_x[j]
-                        y_dest=tree_y[j]
-                        tree_short=j
+                 if settler_inv_wood[i]<5 and len(tree_x)>1:
+                    dist_short=9999
+                    for j in range(0,len(tree_x)):
+                         dist=cal_Dist(settler_x[i],settler_y[i],tree_x[j],tree_y[j])
+                         if dist<dist_short:
+                             dist_short=dist
+                             x_dest=tree_x[j]
+                             y_dest=tree_y[j]
+                             tree_short=j
 
-                     
-                if settler_x[i]-x_dest>0:
-                    x_mod=mod
-                else:
-                    x_mod=mod*-1
+                          
+                    if settler_x[i]-x_dest>0:
+                         x_mod=mod
+                    else:
+                         x_mod=mod*-1
 
-                if settler_y[i]-y_dest>0:
-                    y_mod=mod
-                else:
-                    y_mod=mod*-1
+                    if settler_y[i]-y_dest>0:
+                         y_mod=mod
+                    else:
+                         y_mod=mod*-1
 
-                if dist_short<3:
-                    settler_inv_wood[i]=settler_inv_wood[i]+1
-                    tree.chop(tree_short)
+                    if dist_short<3:
+                         settler_inv_wood[i]=settler_inv_wood[i]+1
+                         tree.chop(tree_short)
+
+                 elif (len([k for k, e in enumerate(house_upgrade) if e==1])>0 or len([k for k, e in enumerate(house_upgrade) if e==3])>0) and settler_inv_wood[i]>=5: 
+                      for j in range(0,len(house_upgrade)):
+                           if house_upgrade[j]==1 or house_upgrade[j]==3 :
+                                x_dest=house_x[j]
+                                y_dest=house_y[j]
+                                j_dest=j
+                                break
+                      if settler_x[i]-x_dest>0:
+                           x_mod=mod
+                      else:
+                           x_mod=mod*-1
+
+                      if settler_y[i]-y_dest>0:
+                           y_mod=mod
+                      else:
+                           y_mod=mod*-1
+
+                      if cal_Dist(settler_x[i],settler_y[i],x_dest,y_dest)<3:
+                           settler_inv_wood[i]=settler_inv_wood[i]-5
+                           if house_upgrade[j_dest]==1: house_upgrade[j_dest]=2
+                           elif house_upgrade[j_dest]==3: house_upgrade[j_dest]=4
+                           if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
+                           
+                                
             elif (avg_an_fert=='-' or avg_an_fert<85) and len(land_farm_i)<len(settler_x)/4 and settler_job[i]=='farmer': #seek to build farms
                 dist_short=9999
+                no_build=0
+
                 for j in range(0,len(land_x)):
                     dist=cal_Dist(settler_x[i],settler_y[i],land_x[j],land_y[j])
                     if dist<dist_short and j not in land_farm_i and len(land_hitbox[j].collidelistall(land_hitbox))>5:
-                        dist_short=dist
-                        x_dest=land_x[j]
-                        y_dest=land_y[j]
-                        land_j=j 
-                if settler_x[i]-x_dest>0:
-                    x_mod=mod
-                else:
-                    x_mod=mod*-1
+                        #for k in range(0,len(house_x)):
+                        #     if land_hitbox[j].collidepoint(house_x[k], house_y[k]):
+                        #          no_build=1
+                        #          break
+                        if not no_build:
+                             dist_short=dist
+                             x_dest=land_x[j]
+                             y_dest=land_y[j]
+                             land_j=j
+                
+                if dist_short!=9999:
+                     if settler_x[i]-x_dest>0:
+                          x_mod=mod
+                     else:
+                          x_mod=mod*-1
 
-                if settler_y[i]-y_dest>0:
-                    y_mod=mod
-                else:
-                    y_mod=mod*-1
-                if dist_short<3:
-                     land_farm_stage[land_j]=1
-                     land_farm_i.append(land_j)
-                     land_farm_tended.append(1)
+                     if settler_y[i]-y_dest>0:
+                          y_mod=mod
+                     else:
+                          y_mod=mod*-1
+                     if dist_short<3:
+                          land_farm_stage[land_j]=1
+                          land_farm_i.append(land_j)
+                          land_farm_tended.append(1)
             elif 0 in land_farm_tended and settler_job[i]=='farmer': #seek to tend farms
                 k=0
                 dist_short=9999
@@ -526,6 +628,7 @@ class settler:
                     y_mod=mod*-1
                 if dist_short<3:
                      land_farm_tended[land_k]=1
+                     if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
             elif any(k>4 for k in land_farm_stage) and settler_job[i]=='farmer': #seek to harvest farms
                 dist_short=9999
                 for j in land_farm_i:
@@ -546,6 +649,7 @@ class settler:
                     y_mod=mod*-1
                 if dist_short<3:
                      farm.harvested(land_j)
+                     if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
             elif len(settler_dead_buried)>0 and not all(settler_dead_buried): #seek to burry the dead
                 dist_short=9999
                 for j in range(0,len(settler_dead_buried)):
@@ -572,12 +676,12 @@ class settler:
                     settler_dead_buried[dead_short]=1
 
 
-            elif len(house_x)>=len(settler_x) and settler_age[i]<YEAR*10*0.35 and settler_happiness[i]>50 and settler_gender[i] and len(settler_x)>1 and len([k for k, e in enumerate(settler_gender) if e == 0])>len(settler_baby_parent)  : #seak mate
+            elif len(house_x)>=len(settler_x) and settler_age[i]<YEAR*10*0.35 and settler_happiness[i]>50  and settler_health[i]>50 and settler_gender[i] and len(settler_x)>1 and len([k for k, e in enumerate(settler_gender) if e == 0])>len(settler_baby_parent)  : #seak mate
                 dist_short=9999
                 for j in range(0,len(settler_x)):
                     
                     dist=cal_Dist(settler_x[i],settler_y[i],settler_x[j],settler_y[j])
-                    if dist<dist_short and not settler_gender[j] and j not in settler_baby_parent and settler_age[j]<YEAR*10*0.35 and not any(item in settler_name[i][1] for item in settler_name[j][1]):
+                    if dist<dist_short and not settler_gender[j] and j not in settler_baby_parent and settler_age[j]<YEAR*10*0.35 and settler_health[j]>50 and not any(item in settler_name[i][1] for item in settler_name[j][1]):
                          dist_short=dist
                          x_dest=settler_x[j]
                          y_dest=settler_y[j]
@@ -596,6 +700,7 @@ class settler:
 
                 if dist_short<3:
                     settler_baby_parent.append(settler_short)
+                    if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
                     #print(settler_age[i]*(15/6300), settler_age[j]*(15/6300))
                     last_name=[settler_name[i][1][0], settler_name[settler_short][1][0]]
                     notification.append("The "+last_name[0]+" family has a new member")
@@ -637,7 +742,10 @@ class settler:
                                 windmill_stage[j]=0
                                 farm_x=[land_x[k] for k in land_farm_i]
                                 farm_y=[land_y[k] for k in land_farm_i]
-                                cent=find_centroid(farm_x[len(farm_x)-5:],farm_y[len(farm_y)-5:])
+                                farm_coord=np.array(tuple(zip(farm_x,farm_y)))
+                                cent_index=KMeans(n_clusters=len(windmill_stage), random_state=0).fit_predict(X=farm_coord, y=None, sample_weight=None)
+                                print(cent_index)
+                                cent=find_centroid([farm_x[p] for p in [k for k, e in enumerate(cent_index) if e == len(windmill_stage)-1]],[farm_y[p] for p in [k for k, e in enumerate(cent_index) if e == len(windmill_stage)-1]])
                                 x_dest=cent[0]
                                 y_dest=cent[1]
                            
@@ -667,8 +775,76 @@ class settler:
                       if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
                            settler_inv_wood[i]=settler_inv_wood[i]-5
                            windmill_stage[j_dest]+=.5
+                           if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
                  
-            elif church_stage<2 and len(house_x)>30 and settler_job[i]=='builder': #seek to build church
+            elif (((len(house_x)>len(tavern_stage)*20 and len(house_x)>5) or len([k for k, e in enumerate(tavern_stage) if e < 1])>0)) and settler_job[i]=='builder':#seek to build tavern 
+                 if settler_inv_wood[i]<5 and len(tree_x)>1:
+                    dist_short=9999
+                    for j in range(0,len(tree_x)):
+                         dist=cal_Dist(settler_x[i],settler_y[i],tree_x[j],tree_y[j])
+                         if dist<dist_short:
+                             dist_short=dist
+                             x_dest=tree_x[j]
+                             y_dest=tree_y[j]
+                             tree_short=j
+
+                          
+                    if settler_x[i]-x_dest>0:
+                         x_mod=mod
+                    else:
+                         x_mod=mod*-1
+
+                    if settler_y[i]-y_dest>0:
+                         y_mod=mod
+                    else:
+                         y_mod=mod*-1
+
+                    if dist_short<3:
+                         settler_inv_wood[i]=settler_inv_wood[i]+1
+                         tree.chop(tree_short)
+
+
+                 elif settler_inv_wood[i]>=5:
+                      if len([k for k, e in enumerate(tavern_stage) if e < 1])==0 or len(tavern_stage)==0: tavern_stage.append(-1)
+                     
+                      for j in range(0,len(tavern_stage)):
+                           if tavern_stage[j]==-1:
+                                tavern_stage[j]=0
+                                house_coord=np.array(tuple(zip(house_x,house_y)))
+                                cent_index=KMeans(n_clusters=len(tavern_stage), random_state=0).fit_predict(X=house_coord, y=None, sample_weight=None)
+                                print(cent_index)
+                                cent=find_centroid([house_x[p] for p in [k for k, e in enumerate(cent_index) if e == len(tavern_stage)-1]],[house_y[p] for p in [k for k, e in enumerate(cent_index) if e == len(tavern_stage)-1]])
+                                x_dest=cent[0]
+                                y_dest=cent[1]
+                           
+                                tavern_x.append(x_dest)
+                                tavern_y.append(y_dest)
+                                j_dest=j
+                                
+             
+
+                           elif tavern_stage[j]>=0 and tavern_stage[j]<1:
+                                x_dest=tavern_x[j]
+                                y_dest=tavern_y[j]
+                                j_dest=j
+          
+
+                           
+                      if settler_x[i]-x_dest>0:
+                           x_mod=mod
+                      else:
+                           x_mod=mod*-1
+
+                      if settler_y[i]-y_dest>0:
+                           y_mod=mod
+                      else:
+                           y_mod=mod*-1
+
+                      if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
+                           settler_inv_wood[i]=settler_inv_wood[i]-5
+                           tavern_stage[j_dest]+=.25
+                           if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
+            elif church_stage<2 and len(house_x)>25 and settler_job[i]=='builder': #seek to build church
                  if settler_inv_wood[i]<5 and len(tree_x)>1:
                     dist_short=9999
                     for j in range(0,len(tree_x)):
@@ -728,9 +904,42 @@ class settler:
                     if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
                         church_stage=church_stage+.1
                         settler_inv_wood[i]=settler_inv_wood[i]-5
+                        if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
+
+   
+            elif sum(tavern_stage)>=1 and settler_happiness[i]<100 and settler_morality[i]<75: #seek tavern when sad
+                 dist_short=9999
+                 for j in range(0,len(tavern_x)):
+                      dist=cal_Dist(settler_x[i],settler_y[i],tavern_x[j],tavern_y[j])
+                      if dist<dist_short and tavern_stage[j]>.9:
+                           dist_short=dist
+                           x_dest=tavern_x[j]
+                           y_dest=tavern_y[j]
+                           tavern_short=j   
 
 
-            elif church_stage>=2 and settler_happiness[i]<100: #seek church when sad
+
+                 if settler_x[i]-x_dest>0:
+                     x_mod=mod
+                 else:
+                     x_mod=mod*-1
+
+                 if settler_y[i]-y_dest>0:
+                     y_mod=mod
+                 else:
+                     y_mod=mod*-1
+
+                 if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
+                     settler_sheltered[i]=1
+                     x_mod=x_mod*3
+                     y_mod=y_mod*3
+                     if settler_happiness[i]<100 and settler_drunk[i]<(100-settler_morality[i]):
+                         settler_happiness[i]=settler_happiness[i]+0.1
+                         settler_drunk[i]=settler_drunk[i]+0.1
+   
+            
+   
+            elif church_stage>=2 and settler_happiness[i]<100 and settler_morality[i]>25: #seek church when sad
                  x_dest=church_x
                  y_dest=church_y
                  if settler_x[i]-x_dest>0:
@@ -745,7 +954,6 @@ class settler:
 
                  if cal_Dist(x_dest,y_dest,settler_x[i],settler_y[i])<3:
                      settler_sheltered[i]=1
-                     if settler_hunger[i]<1000 and settler_age[i]<YEAR*10*0.5 and settler_health[i]<100: settler_health[i]=settler_health[i]+1
                      x_mod=x_mod*3
                      y_mod=y_mod*3
                      if settler_happiness[i]<100:
@@ -776,9 +984,19 @@ class settler:
                      settler_social[i].append(settler_short)
                      if len(settler_social[i])>(len(settler_x)-2)*10: settler_social[i]=[]
                      r_social_action=random.random()
+                     r_disease=random.random()
+                     if settler_sick[i] and r_disease<0.5 and not settler_sick[j]:
+                          settler_sick[j]=1
+                          notification.append(settler_name[j][0]+" "+settler_name[j][1][0]+" caught a disease from "+settler_name[i][0]+" "+settler_name[i][1][0])
+                          print(settler_name[j][0]+" "+settler_name[j][1][0]+" caught a disease from "+settler_name[i][0]+" "+settler_name[i][1][0])
+                     elif settler_sick[j] and r_disease<0.5 and not settler_sick[i]:
+                          settler_sick[i]=1
+                          notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" caught a disease from "+settler_name[j][0]+" "+settler_name[j][1][0])
+                          print(settler_name[i][0]+" "+settler_name[i][1][0]+" caught a disease from "+settler_name[j][0]+" "+settler_name[j][1][0])     
                      if settler_inv_food[i]>1 and settler_morality[i]>65 and settler_inv_food[i]>settler_inv_food[settler_short] and r_social_action>0.5:
                           settler_inv_food[i]=settler_inv_food[i]-1
                           settler_inv_food[settler_short]=settler_inv_food[settler_short]+1
+                          if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
                           if settler_happiness[i]+5<100: settler_happiness[i]=settler_happiness[i]+5
                           else: settler_happiness[i]=100
                           if settler_happiness[i]+10<100: settler_happiness[settler_short]=settler_happiness[settler_short]+10
@@ -800,6 +1018,7 @@ class settler:
                                if settler_health[i]>100*r_die:
                                     settler_health[i]=settler_health[i]-int(100*r_die)
                                     settler_happiness[i]=0
+                                    if settler_status[i]>0: settler_status[i]=settler_status[i]-.1
                                     notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" took "+str(int(100*r_die))+" damage from "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0]+" for stealing")
                                     print(settler_name[i][0]+" "+settler_name[i][1][0]+" took "+str(int(100*r_die))+" damage from "+settler_name[settler_short][0]+" "+settler_name[settler_short][1][0]+" for stealing")
                                     settler_inv_food[i]=settler_inv_food[i]-1
@@ -811,7 +1030,10 @@ class settler:
                                     death_notifed=1
                                     settler_inv_food[settler_short]=settler_inv_food[settler_short]+settler_inv_food[i]
             x_r=random.random()         
-            y_r=random.random() 
+            y_r=random.random()
+            if settler_drunk[i]>50:
+                 x_mod=0
+                 y_mod=0
             if x_r+x_mod<0.5:
                 settler_x[i]=settler_x[i]+1
             else:
@@ -825,6 +1047,7 @@ class settler:
           
             settler.build(i)
             settler_age[i]=settler_age[i]+1
+            if settler_drunk[i]>0: settler_drunk[i]-=0.05
             if temp<32 and not settler_sheltered[i]:
                  settler_health[i]=settler_health[i]-0.1
                  if settler_health[i]<1 and not death_notifed:
@@ -843,7 +1066,13 @@ class settler:
                       notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" died of old age")
                       print(settler_name[i][0]+" "+settler_name[i][1][0]+" died of old age")
                       death_notifed=1
-            if settler_age[i]>YEAR*10*0.35: settler_job[i]='retired'
+            if settler_sick[i]:
+                 settler_health[i]=settler_health[i]-0.1*random.randint(0,1)
+                 if settler_health[i]<1 and not death_notifed:
+                      notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" died from disease")
+                      print(settler_name[i][0]+" "+settler_name[i][1][0]+" died from disease")
+                      death_notifed=1
+            if settler_age[i]>YEAR*10*0.35 and settler_job[i]!='leader': settler_job[i]='retired'
             if settler_health[i]<1:
                 settler_dead_x.append(settler_x[i])
                 settler_dead_y.append(settler_y[i])
@@ -872,7 +1101,7 @@ class settler:
                     if land_hitbox[j].collidepoint(settler_x[i],settler_y[i]):
                       no_build=1
                       break
-                      
+            if church_x!=0 and cal_Dist(settler_x[i],settler_y[i],church_x,church_y)<15: no_build=1         
             if not no_build:       
                  for j in range(0,len(settler_home)):
                       if not settler_home[j]:
@@ -881,6 +1110,8 @@ class settler:
                       
                  house_x.append(settler_x[i])
                  house_y.append(settler_y[i])
+                 house_upgrade.append(0)
+                 if settler_status[i]<5: settler_status[i]=settler_status[i]+.1
                  settler_inv_wood[i]=settler_inv_wood[i]-5
    
     def die(i):
@@ -901,6 +1132,9 @@ class settler:
         settler_age.pop(i)
         settler_name.pop(i)
         settler_morality.pop(i)
+        settler_sick.pop(i)
+        settler_drunk.pop(i)
+        settler_status.pop(i)
         for j in range(0,len(settler_x)):
             if settler_happiness[j]>5:
                 settler_happiness[j]=settler_happiness[j]-5
@@ -918,6 +1152,9 @@ class settler:
          settler_health.append(100)
          settler_sheltered.append(0)
          settler_social.append([])
+         settler_sick.append(0)
+         settler_drunk.append(0)
+         settler_status.append(2.5)
          if avg_happiness!='-': settler_happiness.append(avg_happiness)
          else: settler_happiness.append(100)
          settler_age.append(YEAR)
@@ -937,7 +1174,30 @@ class settler:
          elif r_job==2: settler_job.append('builder')
          #print(settler_job)
 
+    def elect_leader():
+         if int(avg_happiness)>75 and len([k for k, e in enumerate(settler_job) if e =='leader'])>0:
+              i=settler_job.index('leader')
+              if settler_status[i]+0.5<5: settler_status[i]=settler_status[i]+0.5
+              else: settler_status[i]=5 
+              if settler_morality[i]<25: moral_str='Evil'
+              elif settler_morality[i]>=25 and settler_morality[i]<35: moral_str='Immoral'
+              elif settler_morality[i]>=35 and settler_morality[i]<65: moral_str='Neutral'
+              elif settler_morality[i]>=65 and settler_morality[i]<75: moral_str='Moral'
+              else: moral_str='Good'
+              notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" maintained their leadership of the settlement  Disposition: "+moral_str)
+              print(settler_name[i][0]+" "+settler_name[i][1][0]+" maintained their leadership of the settlement  Disposition: "+moral_str)
 
+         else:
+              if len([k for k, e in enumerate(settler_job) if e =='leader'])>0: settler_job[settler_job.index('leader')]='ex-leader'
+              i=settler_status.index(max(settler_status))
+              settler_job[i]='leader'
+              if settler_morality[i]<25: moral_str='Evil'
+              elif settler_morality[i]>=25 and settler_morality[i]<35: moral_str='Immoral'
+              elif settler_morality[i]>=35 and settler_morality[i]<65: moral_str='Neutral'
+              elif settler_morality[i]>=65 and settler_morality[i]<75: moral_str='Moral'
+              else: moral_str='Good'
+              notification.append(settler_name[i][0]+" "+settler_name[i][1][0]+" became the leader of the settlement  Disposition: "+moral_str)
+              print(settler_name[i][0]+" "+settler_name[i][1][0]+" became the leader of the settlement  Disposition: "+moral_str)
 class tree:
     def grow(tree_x,tree_y):
         if len(tree_x)<int(len(land_x)*fertility) and len(land_x)>100:
@@ -947,7 +1207,7 @@ class tree:
                  tree_x.append(land_x[i_ran])
                  tree_y.append(land_y[i_ran])
         for i in range(0,len(tree_x)):
-            if not check_land(tree_x[i],tree_y[i]):
+            if not check_land(tree_x[i],tree_y[i],0):
                 tree_x[i]=-10
                 tree_y[i]=-10
         if -10 in tree_x: tree_x.remove(-10)
@@ -970,10 +1230,10 @@ class house:
         i_house=[]
         for i in range(0,len(house_x)):
             
-            if not check_land(house_x[i],house_y[i]):
+            if not check_land(house_x[i],house_y[i],0):
                 house_x[i]=-10
                 house_y[i]=-10
-
+                house_upgrade[i]=-10    
                 i_house.append(i)
         i_h=0
         for i in range(0,len(settler_home)):
@@ -983,11 +1243,11 @@ class house:
                 i_h=i_h+1
         if -10 in house_x: house_x.remove(-10)
         if -10 in house_y: house_y.remove(-10)
-        
+        if -10 in house_y: house_upgrade.remove(-10)
         buildings_y=house_y
         if church_stage>0:
             buildings_y=buildings_y+[church_y]    
-        buildings_y=buildings_y+windmill_y
+        buildings_y=buildings_y+windmill_y+tavern_y
         render_order=sorted(range(len(buildings_y)), key=lambda k: buildings_y[k])
         render_buildings(house_x,house_y,render_order,church_x,church_y,windmill_x,windmill_y)
     
@@ -1015,7 +1275,7 @@ class animal:
                         y_away=settler_y[j]
                         
             
-            if not check_land(animal_x[i],animal_y[i]):#seek land 
+            if not check_land(animal_x[i],animal_y[i],0):#seek land 
                 x_dest=0
                 y_dest=0
                 dist_short=9999
@@ -1093,7 +1353,7 @@ class animal:
 
         render_animal(animal_x,animal_y)
         for i in range(0,len(animal_food)):
-            if animal_food[i]<1 or not check_land(animal_dead_x[i],animal_dead_y[i]):
+            if animal_food[i]<1 or not check_land(animal_dead_x[i],animal_dead_y[i],0):
                 animal_dead_x.pop(i)
                 animal_dead_y.pop(i)
                 animal_food.pop(i)
@@ -1125,7 +1385,7 @@ class settler_baby:
             x_mod=0
             y_mod=0
             
-            if not check_land(settler_baby_x[i],settler_baby_y[i]):#seek land
+            if not check_land(settler_baby_x[i],settler_baby_y[i],0):#seek land
               
                 x_dest=0
                 y_dest=0
@@ -1172,6 +1432,7 @@ class settler_baby:
                     y_mod=mod*-1
 
             else: settler_baby_grown.append(i)
+            
             x_r=random.random()
             y_r=random.random() 
             if x_r+x_mod<0.5:
@@ -1185,6 +1446,18 @@ class settler_baby:
                 settler_baby_y[i]=settler_baby_y[i]-1
 
             settler_baby_age[i]=settler_baby_age[i]+1
+            if settler_baby_parent[i] in range(0, len(settler_health))  and settler_health[settler_baby_parent[i]]<50:
+                 r_neglect=random.random()
+                 if r_neglect<0.2:
+                      for j in range(0,len(settler_x)):
+                           if settler_happiness[j]>5:
+                                settler_happiness[j]=settler_happiness[j]-5      
+                           else: settler_happiness[j]=0
+                           if j==settler_baby_parent[i]: settler_happiness[j]=0
+                      settler_baby_grown.append(i)
+                      notification.append("The "+settler_baby_name[i][0]+" family has lost a child")
+                      print("The "+settler_baby_name[i][0]+" family has lost a child")
+                      
             if settler_baby_age[i]>YEAR:
                 settler.born(settler_baby_x[i],settler_baby_y[i],settler_baby_name[i])
                 settler_baby_grown.append(i)
@@ -1218,7 +1491,7 @@ class farm:
 
         grain_gone=[]      
         for i in range(0,len(grain_food)):
-            if grain_food[i]<1 or not check_land(grain_x[i],grain_y[i]):
+            if grain_food[i]<1 or not check_land(grain_x[i],grain_y[i],0):
                 grain_gone.append(i)
                 
         for i in sorted(grain_gone, reverse=True):
@@ -1267,7 +1540,7 @@ class cloud:
             if temp>32:
                 for j in land_farm_i:
                     if land_hitbox[j].collidepoint(rain_x[i],rain_y[i]):
-                        land_farm_stage[j]=land_farm_stage[j]+0.00025
+                        land_farm_stage[j]=land_farm_stage[j]+0.0001
                     
 
             if rain_fall[i]>35: del_rain.append(i)
@@ -1280,11 +1553,17 @@ class cloud:
 class boat:
      
      def next_move(boat_x,boat_y):
+          global boat_otw
+          global t_boat
+          t_boat+=1
+          if t_boat>YEAR/2 and boat_otw:
+               boat_otw=0
+
           for i in range(0,len(boat_x)):
             x_mod=0
             y_mod=0
             
-            if not check_land(boat_x[i],boat_y[i]) and i not in boat_landed:#seek land
+            if not check_land(boat_x[i],boat_y[i],0) and i not in boat_landed:#seek land
               
                 x_dest=0
                 y_dest=0
@@ -1306,10 +1585,10 @@ class boat:
                 else:
                     y_mod=-1
 
-            if check_land(boat_x[i],boat_y[i]) and i not in boat_landed:
+            if check_land(boat_x[i],boat_y[i],0) and i not in boat_landed:
                 boat.landed(boat_x[i],boat_y[i])
                 boat_landed.append(i)
-            
+                 
             if  x_mod<0.5:
                 boat_x[i]=boat_x[i]+1
             else:
@@ -1320,22 +1599,26 @@ class boat:
             else:
                 boat_y[i]=boat_y[i]-1
           render_boat(boat_x,boat_y)
+          
+               
      def landed(x,y):
-          global boat_otw
-          r_landed=random.randint(3,8)
+          r_landed=random.randint(4,8)
           for i in range(0,r_landed):
                last_name=[names.get_last_name(), names.get_last_name()]   
                settler.born(x,y,last_name)
-               boat_otw=0
+
           
      def arrive():
           global boat_otw
-          if (len(house_x)-len(settler_x)>5 or (len(settler_x)==0 and len(tree_x)>15)) and not boat_otw:
+          global t_boat
+          if (len(house_x)-len(settler_x)-len(settler_baby_x)*0.25>5 or (len(settler_x)==0 and len(tree_x)>15)) and not boat_otw:
                arrive_y=int(random.random()*size[1])
                arrive_x=int(size[0]+20)
                boat_x.append(arrive_x)
                boat_y.append(arrive_y)
                boat_otw=1
+               t_boat=0
+               
 
 
 
@@ -1344,9 +1627,10 @@ for i in range(0,10000):
      x_r=int(random.gauss(size[0]/2,50))
      y_r=int(random.gauss(size[1]/2,50))
      rect_r=pygame.Rect(x_r-r_l,y_r-r_l,2*r_l,2*r_l)
-     if not check_land(x_r,y_r) and (len(rect_r.collidelistall(land_hitbox))>=2 or len(land_hitbox)<10) :
+     if not check_land(x_r,y_r,0) and (len(rect_r.collidelistall(land_hitbox))>=2 or len(land_hitbox)<10) :
             land_x.append(x_r)
             land_y.append(y_r)
+            land_tread.append(0)
             land_hitbox.append(pygame.Rect(x_r-r_l,y_r-r_l,2*r_l,2*r_l))
             land_farm_stage.append(0)
             land_snow.append(0)
@@ -1378,6 +1662,23 @@ while not done:
     player.draw_land(land_x,land_y)
     player.spawn_settler()
     player.spawn_cloud()
+    r_cloud=random.random()
+    if r_cloud<0.0015 and not cloud_spawner_bool:
+         t_cloud=0
+         cloud_spawner_bool=1
+         y_cloud_spawn_loc=random.random()*size[1]
+
+    if cloud_spawner_bool:
+         y_cloud_loc=int(random.gauss(y_cloud_spawn_loc,25))
+         cloud_x.append(size[0])
+         cloud_y.append(y_cloud_loc)
+         cloud_storm.append(0)
+         cloud_cap.append(20)
+         t_cloud+=1
+
+    if t_cloud>int(YEAR/(15+random.randint(-5,5))): cloud_spawner_bool=0    
+         
+         
     settler.next_move(settler_x,settler_y)
     settler_baby.next_move(settler_baby_x,settler_baby_y)
     boat.arrive()
@@ -1388,7 +1689,7 @@ while not done:
     house.built(house_x,house_y)
     cloud.rain(rain_x,rain_y)
     cloud.move(cloud_x,cloud_y)
-    
+    player.get_info()    
     res = []
     [res.append(x) for x in notification if x not in res]
     notification=res
@@ -1416,8 +1717,11 @@ while not done:
     textRect.topright = (size[0]+200, 0)
     t_n_r+=1
     screen.blit(text, textRect)
-
-    if t%YEAR==0: year_count+=1 
+    
+    if t%YEAR==0:
+         if year_count!=0 and len(settler_status)>0: settler.elect_leader()
+         year_count+=1
+         
     
     if fertility<0.5: fertility=fertility+0.0001
     
